@@ -1,7 +1,11 @@
 from machine import Machine
+import detect
 from settings import *
 import pygame
 import sys
+from multiprocessing import Process, Queue
+
+FPS = 60
 
 
 class Game:
@@ -14,6 +18,11 @@ class Game:
         self.grid_image = pygame.image.load(GRID_IMAGE_PATH).convert_alpha()
         self.machine = Machine()
         self.delta_time = 0
+        self.data_queue = Queue(maxsize=2)
+        self.hand_process = Process(
+            target=detect.run_hand_detection, args=(self.data_queue,)
+        )
+        self.hand_process.start()
 
         main_sound = pygame.mixer.Sound("audio/track.mp3")
         main_sound.play(loops=-1)
@@ -21,20 +30,34 @@ class Game:
     def run(self):
         self.start_time = pygame.time.get_ticks()
 
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
+        try:
+            while True:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        sys.exit()
 
-            self.delta_time = (pygame.time.get_ticks() - self.start_time) / 1000
-            self.start_time = pygame.time.get_ticks()
+                try:
+                    hand_data = self.data_queue.get_nowait()
+                    if not hand_data["hands_visible"]:
+                        pass
+                    else:
+                        landmarks = hand_data["landmarks"]
+                        bbox = hand_data["bbox"]
 
-            pygame.display.update()
-            self.screen.blit(self.bg_image, (0, 0))
-            self.machine.update(self.delta_time)
-            self.screen.blit(self.grid_image, (0, 0))
-            self.clock.tick(FPS)
+                except:
+                    pass
+
+                self.delta_time = (pygame.time.get_ticks() - self.start_time) / 1000
+                self.start_time = pygame.time.get_ticks()
+
+                pygame.display.update()
+                self.screen.blit(self.bg_image, (0, 0))
+                self.machine.update(self.delta_time)
+                self.screen.blit(self.grid_image, (0, 0))
+                self.clock.tick(FPS)
+        except KeyboardInterrupt:
+            print("exit")
 
 
 if __name__ == "__main__":
